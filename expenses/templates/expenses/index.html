@@ -1,0 +1,17 @@
+<!-- expenses/templates/expenses/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Список расходов{% endblock %}
+
+{% block content %}
+    <h2>Список расходов:</h2>
+    <ul>
+        {% for expense in expenses %}
+            <li>{{ expense.category }}: {{ expense.amount }} ₽</li>
+        {% empty %}
+            <li>Нет записей</li>
+        {% endfor %}
+    </ul>
+{% endblock %}
+
+
