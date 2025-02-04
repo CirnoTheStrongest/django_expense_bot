@@ -8,9 +8,10 @@ from datetime import date
 from django.shortcuts import render
 from .models import Expense
 
-def index(request):
+def expense_list(request):
     expenses = Expense.objects.all().order_by('-date')
-    return render(request, 'expenses/index.html', {'expenses': expenses})
+    return render(request, 'expenses/expense_list.html', {'expenses': expenses})
+
 
 
 
