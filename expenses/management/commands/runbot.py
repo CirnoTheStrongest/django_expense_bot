@@ -40,6 +40,25 @@ class Command(BaseCommand):
             except Exception as e:
                 await update.message.reply_text(f"Произошла ошибка: {e}")
 
+        async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            try:
+                msg_args = context.args
+                if len(msg_args) != 1:
+                    await update.message.reply_text("Пожалуйста, используйте формат: /del <id>")
+                    return
+
+                record_id = int(msg_args[0])
+                # Выполняем создание записи через Django ORM в синхронном режиме, обернутом в sync_to_async
+
+                record = await sync_to_async(Expense.objects.get)(pk=record_id)
+                await sync_to_async(record.delete)()
+
+                await update.message.reply_text(f"Запись удалена.")
+            except ValueError:
+                await update.message.reply_text("Ошибка: убедитесь, что сумма указана в числовом формате.")
+            except Exception as e:
+                await update.message.reply_text(f"Произошла ошибка: {e}")
+
         # Асинхронный обработчик команды /list
         async def list_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # Оборачиваем получение списка расходов в sync_to_async
@@ -47,7 +66,7 @@ class Command(BaseCommand):
             if expenses:
                 message = "Последние расходы:\n"
                 for expense in expenses:
-                    message += f"{expense.category}: {expense.amount} ₽\n"
+                    message += f"{expense.category}: {expense.amount} ₽ (id={expense.pk})\n"
                 await update.message.reply_text(message)
             else:
                 await update.message.reply_text("Расходов пока нет.")
@@ -59,6 +78,7 @@ class Command(BaseCommand):
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("add", add_expense))
         application.add_handler(CommandHandler("list", list_expenses))
+        application.add_handler(CommandHandler("del", delete_expense))
 
         self.stdout.write("Бот успешно запущен и ожидает команды.")
         # Запускаем поллинг
