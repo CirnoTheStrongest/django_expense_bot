@@ -1,7 +1,6 @@
-# expenses/management/commands/runbot.py
-import asyncio
+import httpx
 from django.core.management.base import BaseCommand
-from asgiref.sync import sync_to_async  # Импортируем sync_to_async для обертки ORM-запросов
+from asgiref.sync import sync_to_async
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -14,15 +13,24 @@ class Command(BaseCommand):
     help = 'Запускает Telegram-бота для управления расходами'
 
     def handle(self, *args, **options):
-        TOKEN = '7349044974:AAHDRNWkABPDr-Yx5xL_pV02WSkS9nlM_Zc'  # Замените на ваш реальный токен
+        TOKEN = '7349044974:AAHDRNWkABPDr-Yx5xL_pV02WSkS9nlM_Zc'  
 
-        # Асинхронный обработчик команды /start
+        
         async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(
                 "Привет! Я помогу тебе отслеживать расходы. Используй /add для добавления расхода и /list для просмотра."
             )
 
-        # Асинхронный обработчик команды /add <сумма> <категория>
+        async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            await update.message.reply_text(
+                "Бот выполняет следующие команды:\n\n" \
+                "/add <сумма> <категория> - добавляет запись в базу (категория вводится ОБЯЗАТЕЛЬНО)\n\n" \
+                "/del <id записи> - удаляет запись из базы (id можно получить с помощью команды /list)\n\n" \
+                "/list - выводит последние записи\n\n" \
+                "/cat - отправляет картинки котиков"
+            )
+
+        
         async def add_expense(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             try:
                 args = context.args
@@ -32,7 +40,7 @@ class Command(BaseCommand):
 
                 amount = float(args[0])
                 category = ' '.join(args[1:])
-                # Выполняем создание записи через Django ORM в синхронном режиме, обернутом в sync_to_async
+                
                 await sync_to_async(Expense.objects.create)(category=category, amount=amount)
                 await update.message.reply_text(f"Добавлен расход: {category} - {amount} ₽")
             except ValueError:
@@ -48,7 +56,7 @@ class Command(BaseCommand):
                     return
 
                 record_id = int(msg_args[0])
-                # Выполняем создание записи через Django ORM в синхронном режиме, обернутом в sync_to_async
+                
 
                 record = await sync_to_async(Expense.objects.get)(pk=record_id)
                 await sync_to_async(record.delete)()
@@ -59,9 +67,9 @@ class Command(BaseCommand):
             except Exception as e:
                 await update.message.reply_text(f"Произошла ошибка: {e}")
 
-        # Асинхронный обработчик команды /list
+        
         async def list_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-            # Оборачиваем получение списка расходов в sync_to_async
+            
             expenses = await sync_to_async(list)(Expense.objects.all().order_by('-id')[:10])
             if expenses:
                 message = "Последние расходы:\n"
@@ -71,15 +79,37 @@ class Command(BaseCommand):
             else:
                 await update.message.reply_text("Расходов пока нет.")
 
-        # Создаем приложение Telegram-бота с новым API
+        async def secret(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            await update.message.reply_text("Клевер любит Мяту")
+
+        async def random_cat_pic(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get("https://api.thecatapi.com/v1/images/search", timeout=30.0)
+                    response.raise_for_status()
+
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        image_url = data[0].get("url")
+                        await update.message.reply_photo(photo=image_url)
+                    else:
+                        await update.message.reply_text("Не удалось получить фото котика.")
+
+            except Exception as e:
+                await update.message.reply_text(f"Произошла ошибка: {e}")
+
+        
         application = ApplicationBuilder().token(TOKEN).build()
 
-        # Регистрируем обработчики команд
+        
         application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_cmd))
         application.add_handler(CommandHandler("add", add_expense))
         application.add_handler(CommandHandler("list", list_expenses))
         application.add_handler(CommandHandler("del", delete_expense))
+        application.add_handler(CommandHandler("secret", secret))
+        application.add_handler(CommandHandler("cat", random_cat_pic))
 
         self.stdout.write("Бот успешно запущен и ожидает команды.")
-        # Запускаем поллинг
+        
         application.run_polling()
